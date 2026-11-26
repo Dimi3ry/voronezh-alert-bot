@@ -1,0 +1,74 @@
+[
+  {
+    "id": "gusev_36",
+    "name": "Александр Гусев (@gusev_36)",
+    "kind": "telegram_web",
+    "url": "https://t.me/s/gusev_36",
+    "enabled": true,
+    "priority": 1,
+    "official": true
+  },
+  {
+    "id": "mchs36",
+    "name": "МЧС Воронежской области (@mchs36)",
+    "kind": "telegram_web",
+    "url": "https://t.me/s/mchs36",
+    "enabled": true,
+    "priority": 2,
+    "official": true
+  },
+  {
+    "id": "govvrn36",
+    "name": "Правительство Воронежской области (@govvrn36)",
+    "kind": "telegram_web",
+    "url": "https://t.me/s/govvrn36",
+    "enabled": true,
+    "priority": 3,
+    "official": true
+  },
+  {
+    "id": "gorcom36",
+    "name": "Горком36",
+    "kind": "rss",
+    "url": "https://gorcom36.ru/rss/",
+    "enabled": true,
+    "priority": 10,
+    "official": false
+  },
+  {
+    "id": "tvgubernia",
+    "name": "TV Губерния",
+    "kind": "rss",
+    "url": "https://tv-gubernia.ru/feed/",
+    "enabled": true,
+    "priority": 11,
+    "official": false
+  },
+  {
+    "id": "riavrn",
+    "name": "РИА «Воронеж»",
+    "kind": "rss",
+    "url": "https://riavrn.ru/rss/",
+    "enabled": true,
+    "priority": 12,
+    "official": false
+  },
+  {
+    "id": "vestivrn",
+    "name": "Вести Воронеж",
+    "kind": "rss",
+    "url": "https://vestivrn.ru/rss/",
+    "enabled": true,
+    "priority": 13,
+    "official": false
+  },
+  {
+    "id": "moe",
+    "name": "МОЁ! Online",
+    "kind": "rss",
+    "url": "https://moe-online.ru/rss",
+    "enabled": true,
+    "priority": 14,
+    "official": false
+  }
+]

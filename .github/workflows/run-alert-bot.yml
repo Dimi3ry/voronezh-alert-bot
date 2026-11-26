@@ -1,0 +1,150 @@
+name: Run Voronezh Alert Bot
+
+on:
+  schedule:
+    # Максимально частый поддерживаемый интервал GitHub Actions — каждые 5 минут (UTC)
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Режим запуска"
+        required: true
+        default: "once"
+        type: choice
+        options:
+          - once
+          - seed
+          - dry-run
+
+concurrency:
+  group: voronezh-alert-bot-runner
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  check-alerts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main branch
+        uses: actions/checkout@v4
+
+      - name: Check required Telegram secrets
+        id: check_secrets
+        shell: bash
+        env:
+          BOT_TOKEN: ${{ secrets.ALERT_TELEGRAM_BOT_TOKEN || secrets.TELEGRAM_BOT_TOKEN }}
+          CHANNEL_ID: ${{ secrets.ALERT_TELEGRAM_CHANNEL_ID || secrets.TELEGRAM_CHANNEL_ID }}
+          EVENT_NAME: ${{ github.event_name }}
+          RUN_MODE: ${{ inputs.mode || 'once' }}
+        run: |
+          if [ "$RUN_MODE" = "dry-run" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ -z "$BOT_TOKEN" ] || [ -z "$CHANNEL_ID" ]; then
+            MSG="Добавьте секреты ALERT_TELEGRAM_BOT_TOKEN и ALERT_TELEGRAM_CHANNEL_ID (или TELEGRAM_BOT_TOKEN / TELEGRAM_CHANNEL_ID) в Settings -> Secrets and variables -> Actions"
+            if [ "$EVENT_NAME" = "schedule" ]; then
+              echo "::notice::$MSG"
+              echo "ready=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            else
+              echo "::error::$MSG"
+              exit 1
+            fi
+          fi
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Python 3.13
+        if: steps.check_secrets.outputs.ready == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install dependencies
+        if: steps.check_secrets.outputs.ready == 'true'
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e . --no-deps
+
+      - name: Restore database from alert-bot-state branch
+        if: steps.check_secrets.outputs.ready == 'true'
+        shell: bash
+        run: |
+          mkdir -p data
+          if git ls-remote --exit-code --heads origin alert-bot-state >/dev/null 2>&1; then
+            git fetch --depth=1 origin +alert-bot-state:refs/remotes/origin/alert-bot-state
+            if git cat-file -e origin/alert-bot-state:alert_bot.db 2>/dev/null; then
+              git show origin/alert-bot-state:alert_bot.db > data/alert_bot.db
+              echo "Restored data/alert_bot.db from alert-bot-state branch"
+            fi
+          else
+            echo "Branch alert-bot-state does not exist yet; starting with a clean database"
+          fi
+
+      - name: Run alert bot
+        if: steps.check_secrets.outputs.ready == 'true'
+        shell: bash
+        env:
+          ALERT_TELEGRAM_BOT_TOKEN: ${{ secrets.ALERT_TELEGRAM_BOT_TOKEN || secrets.TELEGRAM_BOT_TOKEN }}
+          ALERT_TELEGRAM_CHANNEL_ID: ${{ secrets.ALERT_TELEGRAM_CHANNEL_ID || secrets.TELEGRAM_CHANNEL_ID }}
+          ALERT_GEO_SCOPE: ${{ vars.ALERT_GEO_SCOPE || 'region' }}
+          ALERT_MAX_ITEM_AGE_MINUTES: ${{ vars.ALERT_MAX_ITEM_AGE_MINUTES || '120' }}
+          ALERT_INITIAL_POST_LIMIT: ${{ vars.ALERT_INITIAL_POST_LIMIT || '1' }}
+          ALERT_INCLUDE_SAFETY_MEMO: ${{ vars.ALERT_INCLUDE_SAFETY_MEMO || 'true' }}
+          ALERT_DB_PATH: data/alert_bot.db
+          ALERT_SOURCES_PATH: alert_sources.json
+        run: |
+          MODE="${{ inputs.mode || 'once' }}"
+          case "$MODE" in
+            dry-run)
+              python -m voronezh_alert_bot --dry-run
+              ;;
+            seed)
+              python -m voronezh_alert_bot --seed
+              ;;
+            *)
+              python -m voronezh_alert_bot --once
+              ;;
+          esac
+
+      - name: Save database to alert-bot-state branch
+        if: steps.check_secrets.outputs.ready == 'true' && inputs.mode != 'dry-run'
+        shell: bash
+        run: |
+          if [ ! -f data/alert_bot.db ]; then
+            echo "Database file not found; nothing to save"
+            exit 0
+          fi
+          TMP_STATE=$(mktemp -d)
+          if git ls-remote --exit-code --heads origin alert-bot-state >/dev/null 2>&1; then
+            git fetch --depth=1 origin +alert-bot-state:refs/remotes/origin/alert-bot-state
+            git worktree add "$TMP_STATE" origin/alert-bot-state
+            cd "$TMP_STATE"
+            git checkout -B alert-bot-state
+            cp "$GITHUB_WORKSPACE/data/alert_bot.db" ./alert_bot.db
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add alert_bot.db
+            if git diff --cached --quiet; then
+              echo "Database unchanged; skipping push"
+            else
+              git commit --amend --no-edit
+              git push --force-with-lease origin alert-bot-state
+            fi
+          else
+            git worktree add --orphan -b alert-bot-state "$TMP_STATE"
+            cd "$TMP_STATE"
+            git rm -rf . >/dev/null 2>&1 || true
+            cp "$GITHUB_WORKSPACE/data/alert_bot.db" ./alert_bot.db
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add alert_bot.db
+            git commit -m "Update alert bot state"
+            git push origin alert-bot-state
+          fi
+          cd "$GITHUB_WORKSPACE"
+          git worktree remove --force "$TMP_STATE" || true
