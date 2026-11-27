@@ -38,6 +38,8 @@ class AlertConfigAndCLITests(unittest.TestCase):
                 "ALERT_MAX_ITEM_AGE_MINUTES",
                 "ALERT_INCLUDE_SOURCE",
                 "INCLUDE_SOURCE",
+                "ALERT_INCLUDE_TIME",
+                "INCLUDE_TIME",
             )
             clean = {k: v for k, v in os.environ.items() if k not in keys}
             with patch.dict(os.environ, clean, clear=True):
@@ -47,8 +49,9 @@ class AlertConfigAndCLITests(unittest.TestCase):
                 self.assertEqual(settings.geo_scope, "city")
                 self.assertEqual(settings.max_item_age_minutes, 90)
                 self.assertFalse(settings.include_source)
+                self.assertFalse(settings.include_time)
 
-    def test_format_alert_post_hides_source_by_default_and_escapes_html(self) -> None:
+    def test_format_alert_post_hides_source_and_time_by_default(self) -> None:
         cand = AlertCandidate(
             message=SourceMessage(
                 source_id="gusev_36",
@@ -77,16 +80,18 @@ class AlertConfigAndCLITests(unittest.TestCase):
         self.assertIn("Общий режим опасности атаки БПЛА в регионе сохраняется.", rendered_hidden)
         self.assertNotIn("Александр Гусев", rendered_hidden)
         self.assertNotIn("https://t.me/gusev_36/700", rendered_hidden)
-        self.assertIn("26.11.2026 21:30", rendered_hidden)
+        self.assertNotIn("26.11.2026 21:30", rendered_hidden)
 
-        rendered_with_source = format_alert_post(
+        rendered_with_source_and_time = format_alert_post(
             cand,
             tz_name="Europe/Moscow",
             include_safety_memo=True,
             include_source=True,
+            include_time=True,
         )
-        self.assertIn("Александр Гусев &lt;@gusev_36&gt;", rendered_with_source)
-        self.assertIn("https://t.me/gusev_36/700", rendered_with_source)
+        self.assertIn("Александр Гусев &lt;@gusev_36&gt;", rendered_with_source_and_time)
+        self.assertIn("https://t.me/gusev_36/700", rendered_with_source_and_time)
+        self.assertIn("26.11.2026 21:30", rendered_with_source_and_time)
 
     def test_load_default_sources_and_cli_dry_run(self) -> None:
         sources = load_alert_sources(Path("alert_sources.json"))

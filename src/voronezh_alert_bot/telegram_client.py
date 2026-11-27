@@ -66,6 +66,7 @@ def format_alert_post(
     tz_name: str = "Europe/Moscow",
     include_safety_memo: bool = True,
     include_source: bool = False,
+    include_time: bool = False,
     max_length: int = 4096,
 ) -> str:
     """Формирует HTML-сообщение об опасности или отбое для Telegram-канала."""
@@ -99,7 +100,7 @@ def format_alert_post(
             )
 
     time_only = ""
-    if msg.published_at is not None:
+    if include_time and msg.published_at is not None:
         try:
             dt_local = msg.published_at.astimezone(ZoneInfo(tz_name))
             time_only = dt_local.strftime("%d.%m.%Y %H:%M")
@@ -269,6 +270,7 @@ class TelegramAlertClient:
         tz_name: str = "Europe/Moscow",
         include_safety_memo: bool = True,
         include_source: bool = False,
+        include_time: bool = False,
         disable_notification: bool = False,
     ) -> int:
         text = format_alert_post(
@@ -276,6 +278,7 @@ class TelegramAlertClient:
             tz_name=tz_name,
             include_safety_memo=include_safety_memo,
             include_source=include_source,
+            include_time=include_time,
         )
         return self.send_message(
             channel_id,

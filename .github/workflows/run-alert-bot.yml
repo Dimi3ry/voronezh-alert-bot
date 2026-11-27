@@ -85,6 +85,7 @@ jobs:
           ALERT_INITIAL_POST_LIMIT: ${{ vars.ALERT_INITIAL_POST_LIMIT || '1' }}
           ALERT_INCLUDE_SAFETY_MEMO: ${{ vars.ALERT_INCLUDE_SAFETY_MEMO || 'true' }}
           ALERT_INCLUDE_SOURCE: ${{ vars.ALERT_INCLUDE_SOURCE || vars.INCLUDE_SOURCE || 'false' }}
+          ALERT_INCLUDE_TIME: ${{ vars.ALERT_INCLUDE_TIME || vars.INCLUDE_TIME || 'false' }}
           ALERT_DB_PATH: data/alert_bot.db
           ALERT_SOURCES_PATH: alert_sources.json
         run: |

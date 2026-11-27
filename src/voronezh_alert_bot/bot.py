@@ -234,6 +234,7 @@ class VoronezhAlertBot:
                     tz_name=self.settings.timezone,
                     include_safety_memo=self.settings.include_safety_memo,
                     include_source=self.settings.include_source,
+                    include_time=self.settings.include_time,
                     disable_notification=disable_notif,
                 )
                 self.storage.record_message(
