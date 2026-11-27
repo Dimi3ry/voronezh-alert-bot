@@ -52,6 +52,41 @@ _RETROSPECTIVE_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Исключения для утренних/итоговых сводок ПВО: старые новости и подборки не должны попадать в сводку
+_SUMMARY_NOISE_RE = re.compile(
+    r"(?:"
+    r"главные\s+новости|итоги\s+дня|дайджест|"
+    r"остается\s+в\s+больниц|октябрьск\w*\s+атак|прошл\w*\s+месяц|"
+    r"следственн\w*\s+комитет|уголовн\w*\s+дел|суд\s+вынес"
+    r")",
+    re.IGNORECASE,
+)
+
+# Официальные/региональные сводки работы ПВО и последствий атаки БПЛА после отбоя
+_PATTERNS_UAV_SUMMARY = (
+    re.compile(
+        r"(?:сил\w*\s+пво|дежурн\w*\s+(?:силами|средствами)(?:\s+пво)?|средств\w*\s+рэб)"
+        r"[^.\n]{0,140}(?:обнаружен\w*|уничтожен\w*|сбит\w*|перехвачен\w*|подавлен\w*|ликвидирован\w*)"
+        r"[^.\n]{0,100}(?:бпла|беспилот\w*|дрон\w*)"
+    ),
+    re.compile(
+        r"(?:уничтожен\w*|сбит\w*|перехвачен\w*|подавлен\w*|ликвидирован\w*)"
+        r"[^.\n]{0,60}(?:бпла|беспилот\w*|дрон\w*)"
+        r"[\s\S]{0,180}(?:сил\w*\s+пво|рэб|пострадавш\w*|разрушен\w*|поврежден\w*|предварительным\s+данным)"
+    ),
+    re.compile(
+        r"(?:пострадавш\w*|разрушен\w*)\s+(?:и\s+(?:разрушен\w*|пострадавш\w*)\s+)?"
+        r"(?:нет|отсутствуют|не\s+зафиксирован\w*)"
+        r"[\s\S]{0,180}(?:бпла|беспилот\w*|дрон\w*|атак\w*|налет\w*|пво)"
+    ),
+)
+
+_SUMMARY_VORONEZH_RE = re.compile(
+    r"(?:\bнад\s+воронеж\w*|\bв\s+воронеж\w*\s+област|\bна\s+территории\s+воронеж\w*\s+област|"
+    r"\bв\s+небе\s+над\s+воронеж|\bворонежск\w+\s+(?:неб|област|район)\w*)",
+    re.IGNORECASE,
+)
+
 # Базовые регулярные выражения для 8 классов событий (проверяются от более точных к общим)
 _PATTERNS_MISSILE_CLEAR = (
     re.compile(r"(?:отбо[йя]|отмен[аеиуы]|отменил\w*|снят[аои]?)\s+(?:режима\s+)?ракетн\w*\s+опасност"),
@@ -300,7 +335,21 @@ def _build_excerpt(message: SourceMessage) -> str:
     return f"{cut}…"
 
 
-def classify_message(message: SourceMessage) -> ClassifiedAlert | None:
+def _classify_summary(folded: str, *, official: bool) -> AlertKind | None:
+    if _SUMMARY_NOISE_RE.search(folded):
+        return None
+    if not _matches_any(folded, _PATTERNS_UAV_SUMMARY):
+        return None
+    if not official and not _SUMMARY_VORONEZH_RE.search(folded):
+        return None
+    return AlertKind.UAV_SUMMARY
+
+
+def classify_message(
+    message: SourceMessage,
+    *,
+    include_summary: bool = True,
+) -> ClassifiedAlert | None:
     """Классифицирует сообщение как оперативную тревогу/отбой по Воронежу или возвращает None."""
     title_clean = clean_whitespace(message.title)
     body_clean = clean_whitespace(message.text)
@@ -352,11 +401,14 @@ def classify_message(message: SourceMessage) -> ClassifiedAlert | None:
         kind = AlertKind.UAV_ALERT
 
     if kind is None:
-        return None
+        if include_summary:
+            kind = _classify_summary(folded, official=message.official)
+        if kind is None:
+            return None
 
     # Итоговые/архивные статьи не должны срабатывать как активная тревога или отбой,
     # если в них нет прямого объявления отбоя/введения режима.
-    if _RETROSPECTIVE_RE.search(folded):
+    if not kind.is_summary and _RETROSPECTIVE_RE.search(folded):
         has_explicit_declaration = (
             kind.is_clear
             and bool(re.search(r"(?:объявил\w*|отменил\w*|отбо[йя]|отмена)\s+", folded))
@@ -366,7 +418,14 @@ def classify_message(message: SourceMessage) -> ClassifiedAlert | None:
             and "пострадавш" not in folded
         )
         if not has_explicit_declaration:
-            return None
+            if include_summary:
+                summary_kind = _classify_summary(folded, official=message.official)
+                if summary_kind is not None:
+                    kind = summary_kind
+                else:
+                    return None
+            else:
+                return None
 
     locations, location_key, is_city_or_region_wide = _extract_locations(folded)
     return ClassifiedAlert(

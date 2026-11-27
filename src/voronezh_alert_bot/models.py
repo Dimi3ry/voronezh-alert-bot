@@ -18,6 +18,7 @@ class AlertKind(str, Enum):
     UAV_CLEAR = "uav_clear"
     AVIATION_ALERT = "aviation_alert"
     AVIATION_CLEAR = "aviation_clear"
+    UAV_SUMMARY = "uav_summary"
 
     @property
     def is_clear(self) -> bool:
@@ -29,6 +30,10 @@ class AlertKind(str, Enum):
         }
 
     @property
+    def is_summary(self) -> bool:
+        return self == AlertKind.UAV_SUMMARY
+
+    @property
     def threat_family(self) -> str:
         if self in {AlertKind.MISSILE_ALERT, AlertKind.MISSILE_CLEAR}:
             return "missile"
@@ -36,6 +41,8 @@ class AlertKind(str, Enum):
             return "uav_immediate"
         if self in {AlertKind.AVIATION_ALERT, AlertKind.AVIATION_CLEAR}:
             return "aviation"
+        if self == AlertKind.UAV_SUMMARY:
+            return "uav_summary"
         return "uav"
 
 
@@ -94,6 +101,7 @@ class AlertCandidate:
 
     message: SourceMessage
     alert: ClassifiedAlert
+    duration_seconds: int | None = None
 
 
 @dataclass(slots=True)

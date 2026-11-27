@@ -186,6 +186,33 @@ class AlertStorage:
                 )
             self._conn.commit()
 
+    def get_active_duration_seconds(
+        self,
+        family: str,
+        event_at: datetime,
+        *,
+        max_hours: int = 24,
+    ) -> int | None:
+        """Возвращает длительность активной угрозы в секундах на момент отбоя."""
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT active, updated_at FROM threat_state WHERE family = ?",
+                (family,),
+            ).fetchone()
+            if not row or not int(row["active"]):
+                return None
+            try:
+                started_at = datetime.fromisoformat(str(row["updated_at"]))
+                if started_at.tzinfo is None:
+                    started_at = started_at.replace(tzinfo=timezone.utc)
+            except ValueError:
+                return None
+
+        delta = int((event_at - started_at).total_seconds())
+        if delta <= 0 or delta > max_hours * 3600:
+            return None
+        return delta
+
     def is_family_active(
         self,
         family: str,
@@ -291,6 +318,17 @@ class AlertStorage:
             ):
                 return True
 
+        # 5. Для сводок после отбоя используем расширенное окно подавления дублей между источниками
+        if kind.is_summary:
+            summary_window = max(dedup_cooldown_minutes, 120)
+            if self.has_recent_event(
+                kind,
+                location_key=None,
+                within_minutes=summary_window,
+                now=ref_now,
+            ):
+                return True
+
         return False
 
     def apply_published_event(
@@ -322,31 +360,32 @@ class AlertStorage:
                 ),
             )
 
-            active_flag = 0 if kind.is_clear else 1
-            locations_json = json.dumps(list(alert.locations), ensure_ascii=False)
-            self._conn.execute(
-                """
-                INSERT INTO threat_state(
-                    family, active, last_kind, active_locations_json, updated_at, posted_at, last_source_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(family) DO UPDATE SET
-                    active = excluded.active,
-                    last_kind = excluded.last_kind,
-                    active_locations_json = excluded.active_locations_json,
-                    updated_at = excluded.updated_at,
-                    posted_at = excluded.posted_at,
-                    last_source_id = excluded.last_source_id
-                """,
-                (
-                    family,
-                    active_flag,
-                    kind.value,
-                    locations_json,
-                    event_iso,
-                    posted_iso,
-                    message.source_id,
-                ),
-            )
+            if not kind.is_summary:
+                active_flag = 0 if kind.is_clear else 1
+                locations_json = json.dumps(list(alert.locations), ensure_ascii=False)
+                self._conn.execute(
+                    """
+                    INSERT INTO threat_state(
+                        family, active, last_kind, active_locations_json, updated_at, posted_at, last_source_id
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(family) DO UPDATE SET
+                        active = excluded.active,
+                        last_kind = excluded.last_kind,
+                        active_locations_json = excluded.active_locations_json,
+                        updated_at = excluded.updated_at,
+                        posted_at = excluded.posted_at,
+                        last_source_id = excluded.last_source_id
+                    """,
+                    (
+                        family,
+                        active_flag,
+                        kind.value,
+                        locations_json,
+                        event_iso,
+                        posted_iso,
+                        message.source_id,
+                    ),
+                )
 
             # Полный отбой БПЛА снимает также непосредственную угрозу БПЛА
             if kind == AlertKind.UAV_CLEAR:

@@ -132,7 +132,7 @@ class VoronezhAlertBot:
                 report.duplicates_skipped += 1
                 continue
 
-            classified = classify_message(msg)
+            classified = classify_message(msg, include_summary=self.settings.include_summary)
             if classified is None:
                 non_alert_or_stale.append((msg, None))
                 continue
@@ -211,6 +211,13 @@ class VoronezhAlertBot:
                 if not dry_run:
                     self.storage.record_message(cand.message, alert=cand.alert, posted=False)
                 continue
+
+            if cand.alert.kind.is_clear:
+                cand.duration_seconds = self.storage.get_active_duration_seconds(
+                    cand.alert.kind.threat_family,
+                    cand.message.published_at or ref_now,
+                    max_hours=max(self.settings.state_ttl_hours, 24),
+                )
 
             if dry_run:
                 report.posted += 1

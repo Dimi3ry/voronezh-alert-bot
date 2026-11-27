@@ -12,7 +12,7 @@ from unittest.mock import patch
 from voronezh_alert_bot.cli import main
 from voronezh_alert_bot.config import load_alert_settings, load_alert_sources
 from voronezh_alert_bot.models import AlertCandidate, AlertKind, ClassifiedAlert, SourceMessage
-from voronezh_alert_bot.telegram_client import format_alert_post
+from voronezh_alert_bot.telegram_client import format_alert_post, format_duration
 
 
 class AlertConfigAndCLITests(unittest.TestCase):
@@ -92,6 +92,35 @@ class AlertConfigAndCLITests(unittest.TestCase):
         self.assertIn("Александр Гусев &lt;@gusev_36&gt;", rendered_with_source_and_time)
         self.assertIn("https://t.me/gusev_36/700", rendered_with_source_and_time)
         self.assertIn("26.11.2026 21:30", rendered_with_source_and_time)
+
+    def test_format_duration_and_clear_post_shows_duration(self) -> None:
+        self.assertEqual(format_duration(3 * 3600 + 40 * 60), "3 ч 40 мин")
+        self.assertEqual(format_duration(45 * 60), "45 мин")
+        self.assertEqual(format_duration(25), "менее минуты")
+
+        cand = AlertCandidate(
+            message=SourceMessage(
+                source_id="gusev_36",
+                source_name="Александр Гусев (@gusev_36)",
+                source_kind="telegram_web",
+                official=True,
+                priority=1,
+                external_id="gusev_36/701",
+                url="https://t.me/gusev_36/701",
+                title="Отбой",
+                text="Отбой опасности атаки БПЛА в регионе.",
+            ),
+            alert=ClassifiedAlert(
+                kind=AlertKind.UAV_CLEAR,
+                locations=("Воронеж и область",),
+                location_key="region",
+                is_voronezh_city_or_region_wide=True,
+                excerpt="Отбой опасности атаки БПЛА в регионе.",
+            ),
+            duration_seconds=3 * 3600 + 40 * 60,
+        )
+        rendered = format_alert_post(cand)
+        self.assertIn("⏱ Режим действовал 3 ч 40 мин", rendered)
 
     def test_load_default_sources_and_cli_dry_run(self) -> None:
         sources = load_alert_sources(Path("alert_sources.json"))

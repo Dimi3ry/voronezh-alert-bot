@@ -34,10 +34,12 @@ class _FakeFetcher:
 class _FakeTelegram:
     def __init__(self) -> None:
         self.sent: list[tuple[str, AlertKind, tuple[str, ...], str]] = []
+        self.candidates: list = []
         self._seq = 1
 
     def publish_alert(self, channel_id, candidate, **kwargs) -> int:
         self._seq += 1
+        self.candidates.append(candidate)
         self.sent.append(
             (str(channel_id), candidate.alert.kind, candidate.alert.locations, candidate.message.source_id)
         )
@@ -209,6 +211,32 @@ class AlertBotWorkflowTests(unittest.TestCase):
             [item[1] for item in tg.sent[2:]],
             [AlertKind.MISSILE_CLEAR, AlertKind.UAV_CLEAR],
         )
+        # Ракетная опасность действовала 10 мин (t0+20 -> t0+30), БПЛА — 35 мин (t0 -> t0+35)
+        self.assertEqual(tg.candidates[2].duration_seconds, 600)
+        self.assertEqual(tg.candidates[3].duration_seconds, 2100)
+
+        # Утренняя сводка ПВО после отбоя публикуется при include_summary=True
+        fetcher.messages.append(
+            SourceMessage(
+                source_id="gusev_36",
+                source_name="Александр Гусев (@gusev_36)",
+                source_kind="telegram_web",
+                official=True,
+                priority=1,
+                external_id="gusev_36/506",
+                url="https://t.me/gusev_36/506",
+                title="Итоги ПВО",
+                text=(
+                    "Минувшей ночью дежурными силами ПВО на территории Воронежской области "
+                    "уничтожены 8 БПЛА. Пострадавших и разрушений нет."
+                ),
+                published_at=t0 + timedelta(minutes=50),
+            )
+        )
+        report3 = bot.run_once(now=t0 + timedelta(minutes=55))
+        self.assertEqual(report3.posted, 1)
+        self.assertEqual(tg.sent[4][1], AlertKind.UAV_SUMMARY)
+        self.assertFalse(self.storage.is_family_active("uav", now=t0 + timedelta(minutes=55)))
 
     def test_dry_run_does_not_mutate_db(self) -> None:
         now = datetime(2026, 11, 26, 20, 0, tzinfo=timezone.utc)

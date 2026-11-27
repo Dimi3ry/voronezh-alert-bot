@@ -138,6 +138,7 @@ class AlertSettings:
     max_posts_per_cycle: int = 5
     post_delay_seconds: float = 1.5
     include_safety_memo: bool = True
+    include_summary: bool = True
     include_source: bool = False
     include_time: bool = False
     disable_notification: bool = False
@@ -198,6 +199,9 @@ def load_alert_settings(
     include_time_raw = os.environ.get("ALERT_INCLUDE_TIME")
     if include_time_raw is None:
         include_time_raw = os.environ.get("INCLUDE_TIME")
+    include_summary_raw = os.environ.get("ALERT_INCLUDE_SUMMARY")
+    if include_summary_raw is None:
+        include_summary_raw = os.environ.get("INCLUDE_SUMMARY")
 
     return AlertSettings(
         telegram_bot_token=token,
@@ -213,6 +217,7 @@ def load_alert_settings(
         max_posts_per_cycle=max(1, int(os.environ.get("ALERT_MAX_POSTS_PER_CYCLE", "5"))),
         post_delay_seconds=max(0.0, float(os.environ.get("ALERT_POST_DELAY_SECONDS", "1.5"))),
         include_safety_memo=_parse_bool(os.environ.get("ALERT_INCLUDE_SAFETY_MEMO"), True),
+        include_summary=_parse_bool(include_summary_raw, True),
         include_source=_parse_bool(include_source_raw, False),
         include_time=_parse_bool(include_time_raw, False),
         disable_notification=_parse_bool(os.environ.get("ALERT_DISABLE_NOTIFICATION"), False),

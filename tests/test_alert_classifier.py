@@ -181,6 +181,35 @@ class AlertClassifierTests(unittest.TestCase):
             with self.subTest(msg=msg.title):
                 self.assertIsNone(classify_message(msg))
 
+    def test_classifies_post_clear_pvo_summary_when_enabled(self) -> None:
+        official_summary = _tg_msg(
+            "За прошедшую ночь дежурными силами ПВО на территории Воронежской области "
+            "обнаружены и уничтожены более 10 беспилотников. По предварительным данным, "
+            "пострадавших и разрушений нет."
+        )
+        res = classify_message(official_summary, include_summary=True)
+        self.assertIsNotNone(res)
+        assert res is not None
+        self.assertEqual(res.kind, AlertKind.UAV_SUMMARY)
+        self.assertIsNone(classify_message(official_summary, include_summary=False))
+
+        # Отбой с упоминанием сбитых БПЛА всё равно классифицируется как отбой, а не сводка
+        combined_clear = _tg_msg(
+            "Внимание! Отбой опасности атаки БПЛА в регионе. "
+            "За ночь дежурными силами ПВО уничтожены 5 беспилотников, пострадавших нет."
+        )
+        res_clear = classify_message(combined_clear, include_summary=True)
+        self.assertIsNotNone(res_clear)
+        assert res_clear is not None
+        self.assertEqual(res_clear.kind, AlertKind.UAV_CLEAR)
+
+        # Общероссийская сводка Минобороны без Воронежской области не должна попадать как сводка
+        federal_clickbait = _rss_msg(
+            "Где сбили ночью 26 ноября беспилотники, рассказали воронежцам",
+            "В течение прошедшей ночи дежурными силами ПВО были уничтожены 343 беспилотника, отчитались в Минобороны.",
+        )
+        self.assertIsNone(classify_message(federal_clickbait, include_summary=True))
+
 
 if __name__ == "__main__":
     unittest.main()

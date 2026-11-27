@@ -57,7 +57,29 @@ _EVENT_META: dict[AlertKind, tuple[str, str, tuple[str, ...]]] = {
         "ОТБОЙ АВИАЦИОННОЙ ОПАСНОСТИ",
         ("#Воронеж", "#Отбой", "#АвиационнаяОпасность"),
     ),
+    AlertKind.UAV_SUMMARY: (
+        "📋",
+        "ИТОГИ ОТРАЖЕНИЯ АТАКИ БПЛА",
+        ("#Воронеж", "#БПЛА", "#ПВО"),
+    ),
 }
+
+
+def format_duration(seconds: int) -> str:
+    """Форматирует длительность режима тревоги в человекочитаемый вид."""
+    if seconds < 60:
+        return "менее минуты"
+    total_minutes = seconds // 60
+    hours, minutes = divmod(total_minutes, 60)
+    days, hours = divmod(hours, 24)
+    chunks: list[str] = []
+    if days:
+        chunks.append(f"{days} д")
+    if hours:
+        chunks.append(f"{hours} ч")
+    if minutes:
+        chunks.append(f"{minutes} мин")
+    return " ".join(chunks) or "менее минуты"
 
 
 def format_alert_post(
@@ -79,6 +101,9 @@ def format_alert_post(
     locations_str = ", ".join(alert.locations) if alert.locations else "Воронеж и область"
     parts.append(f"📍 <b>Территория:</b> {html.escape(locations_str, quote=False)}")
 
+    if alert.kind.is_clear and candidate.duration_seconds is not None:
+        parts.append(f"⏱ Режим действовал {format_duration(candidate.duration_seconds)}")
+
     if alert.kind == AlertKind.UAV_IMMEDIATE_CLEAR and alert.uav_general_remains:
         parts.append("ℹ️ <i>Общий режим опасности атаки БПЛА в регионе сохраняется.</i>")
 
@@ -87,7 +112,7 @@ def format_alert_post(
         excerpt_idx = len(parts)
         parts.append(html.escape(alert.excerpt, quote=False))
 
-    if include_safety_memo and not alert.kind.is_clear:
+    if include_safety_memo and not alert.kind.is_clear and not alert.kind.is_summary:
         if alert.kind in {AlertKind.MISSILE_ALERT, AlertKind.UAV_IMMEDIATE_ALERT}:
             parts.append(
                 "🛡 <i>Отойдите от окон, перейдите в помещение со сплошными стенами "
