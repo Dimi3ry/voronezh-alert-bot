@@ -3,7 +3,7 @@ name: Run Voronezh Alert Bot
 on:
   schedule:
     # Максимально частый поддерживаемый интервал GitHub Actions — каждые 5 минут (UTC)
-    - cron: "*/5 * * * *"
+    - cron: "*/9 * * * *"
   workflow_dispatch:
     inputs:
       mode:
