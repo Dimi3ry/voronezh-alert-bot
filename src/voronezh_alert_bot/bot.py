@@ -233,6 +233,7 @@ class VoronezhAlertBot:
                     cand,
                     tz_name=self.settings.timezone,
                     include_safety_memo=self.settings.include_safety_memo,
+                    include_source=self.settings.include_source,
                     disable_notification=disable_notif,
                 )
                 self.storage.record_message(

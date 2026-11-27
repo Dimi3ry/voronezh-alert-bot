@@ -36,6 +36,8 @@ class AlertConfigAndCLITests(unittest.TestCase):
                 "ALERT_TELEGRAM_CHANNEL_ID",
                 "ALERT_GEO_SCOPE",
                 "ALERT_MAX_ITEM_AGE_MINUTES",
+                "ALERT_INCLUDE_SOURCE",
+                "INCLUDE_SOURCE",
             )
             clean = {k: v for k, v in os.environ.items() if k not in keys}
             with patch.dict(os.environ, clean, clear=True):
@@ -44,8 +46,9 @@ class AlertConfigAndCLITests(unittest.TestCase):
                 self.assertEqual(settings.telegram_channel_id, "@base_ch")
                 self.assertEqual(settings.geo_scope, "city")
                 self.assertEqual(settings.max_item_age_minutes, 90)
+                self.assertFalse(settings.include_source)
 
-    def test_format_alert_post_escapes_html_and_shows_partial_clear_note(self) -> None:
+    def test_format_alert_post_hides_source_by_default_and_escapes_html(self) -> None:
         cand = AlertCandidate(
             message=SourceMessage(
                 source_id="gusev_36",
@@ -68,12 +71,22 @@ class AlertConfigAndCLITests(unittest.TestCase):
                 excerpt="Отмена непосредственной угрозы удара БПЛА & сохраняется общий режим.",
             ),
         )
-        rendered = format_alert_post(cand, tz_name="Europe/Moscow", include_safety_memo=True)
-        self.assertLessEqual(len(rendered), 4096)
-        self.assertIn("ОТМЕНА НЕПОСРЕДСТВЕННОЙ УГРОЗЫ БПЛА", rendered)
-        self.assertIn("Общий режим опасности атаки БПЛА в регионе сохраняется.", rendered)
-        self.assertIn("Александр Гусев &lt;@gusev_36&gt;", rendered)
-        self.assertIn("26.11.2026 21:30", rendered)
+        rendered_hidden = format_alert_post(cand, tz_name="Europe/Moscow", include_safety_memo=True)
+        self.assertLessEqual(len(rendered_hidden), 4096)
+        self.assertIn("ОТМЕНА НЕПОСРЕДСТВЕННОЙ УГРОЗЫ БПЛА", rendered_hidden)
+        self.assertIn("Общий режим опасности атаки БПЛА в регионе сохраняется.", rendered_hidden)
+        self.assertNotIn("Александр Гусев", rendered_hidden)
+        self.assertNotIn("https://t.me/gusev_36/700", rendered_hidden)
+        self.assertIn("26.11.2026 21:30", rendered_hidden)
+
+        rendered_with_source = format_alert_post(
+            cand,
+            tz_name="Europe/Moscow",
+            include_safety_memo=True,
+            include_source=True,
+        )
+        self.assertIn("Александр Гусев &lt;@gusev_36&gt;", rendered_with_source)
+        self.assertIn("https://t.me/gusev_36/700", rendered_with_source)
 
     def test_load_default_sources_and_cli_dry_run(self) -> None:
         sources = load_alert_sources(Path("alert_sources.json"))

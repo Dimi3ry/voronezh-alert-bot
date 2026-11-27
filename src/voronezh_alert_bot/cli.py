@@ -138,6 +138,7 @@ def _cmd_dry_run(bot: VoronezhAlertBot) -> int:
             cand,
             tz_name=bot.settings.timezone,
             include_safety_memo=bot.settings.include_safety_memo,
+            include_source=bot.settings.include_source,
         )
         print(f"[{idx}] {cand.alert.kind.value} | {cand.message.source_id}")
         print(rendered)

@@ -47,7 +47,7 @@ class AlertStorageTests(unittest.TestCase):
         m1 = _make_msg("gusev_36", "1", official=True, published_at=t0)
         self.assertFalse(self.storage.should_suppress_duplicate(m1, alert, now=t0))
         self.storage.apply_published_event(m1, alert, now=t0)
-        self.assertTrue(self.storage.is_family_active("uav"))
+        self.assertTrue(self.storage.is_family_active("uav", now=t0))
 
         # Повтор от МЧС или СМИ пока тревога активна должен подавляться
         m2 = _make_msg("mchs36", "2", official=True, published_at=t0 + timedelta(minutes=2))
@@ -67,7 +67,7 @@ class AlertStorageTests(unittest.TestCase):
             self.storage.should_suppress_duplicate(m3, clear_alert, now=t0 + timedelta(hours=3))
         )
         self.storage.apply_published_event(m3, clear_alert, now=t0 + timedelta(hours=3))
-        self.assertFalse(self.storage.is_family_active("uav"))
+        self.assertFalse(self.storage.is_family_active("uav", now=t0 + timedelta(hours=3)))
 
         # Повторный отбой из другого источника подавляется
         m4 = _make_msg("gorcom36", "4", official=False, published_at=t0 + timedelta(hours=3, minutes=5))

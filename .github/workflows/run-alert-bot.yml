@@ -1,9 +1,6 @@
 name: Run Voronezh Alert Bot
 
 on:
-  schedule:
-    # Максимально частый поддерживаемый интервал GitHub Actions — каждые 5 минут (UTC)
-    - cron: "*/9 * * * *"
   workflow_dispatch:
     inputs:
       mode:
@@ -36,7 +33,6 @@ jobs:
         env:
           BOT_TOKEN: ${{ secrets.ALERT_TELEGRAM_BOT_TOKEN || secrets.TELEGRAM_BOT_TOKEN }}
           CHANNEL_ID: ${{ secrets.ALERT_TELEGRAM_CHANNEL_ID || secrets.TELEGRAM_CHANNEL_ID }}
-          EVENT_NAME: ${{ github.event_name }}
           RUN_MODE: ${{ inputs.mode || 'once' }}
         run: |
           if [ "$RUN_MODE" = "dry-run" ]; then
@@ -44,15 +40,8 @@ jobs:
             exit 0
           fi
           if [ -z "$BOT_TOKEN" ] || [ -z "$CHANNEL_ID" ]; then
-            MSG="Добавьте секреты ALERT_TELEGRAM_BOT_TOKEN и ALERT_TELEGRAM_CHANNEL_ID (или TELEGRAM_BOT_TOKEN / TELEGRAM_CHANNEL_ID) в Settings -> Secrets and variables -> Actions"
-            if [ "$EVENT_NAME" = "schedule" ]; then
-              echo "::notice::$MSG"
-              echo "ready=false" >> "$GITHUB_OUTPUT"
-              exit 0
-            else
-              echo "::error::$MSG"
-              exit 1
-            fi
+            echo "::error::Добавьте секреты ALERT_TELEGRAM_BOT_TOKEN и ALERT_TELEGRAM_CHANNEL_ID (или TELEGRAM_BOT_TOKEN / TELEGRAM_CHANNEL_ID) в Settings -> Secrets and variables -> Actions"
+            exit 1
           fi
           echo "ready=true" >> "$GITHUB_OUTPUT"
 
@@ -95,6 +84,7 @@ jobs:
           ALERT_MAX_ITEM_AGE_MINUTES: ${{ vars.ALERT_MAX_ITEM_AGE_MINUTES || '120' }}
           ALERT_INITIAL_POST_LIMIT: ${{ vars.ALERT_INITIAL_POST_LIMIT || '1' }}
           ALERT_INCLUDE_SAFETY_MEMO: ${{ vars.ALERT_INCLUDE_SAFETY_MEMO || 'true' }}
+          ALERT_INCLUDE_SOURCE: ${{ vars.ALERT_INCLUDE_SOURCE || vars.INCLUDE_SOURCE || 'false' }}
           ALERT_DB_PATH: data/alert_bot.db
           ALERT_SOURCES_PATH: alert_sources.json
         run: |

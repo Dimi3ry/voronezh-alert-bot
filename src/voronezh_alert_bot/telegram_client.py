@@ -65,6 +65,7 @@ def format_alert_post(
     *,
     tz_name: str = "Europe/Moscow",
     include_safety_memo: bool = True,
+    include_source: bool = False,
     max_length: int = 4096,
 ) -> str:
     """Формирует HTML-сообщение об опасности или отбое для Telegram-канала."""
@@ -80,7 +81,9 @@ def format_alert_post(
     if alert.kind == AlertKind.UAV_IMMEDIATE_CLEAR and alert.uav_general_remains:
         parts.append("ℹ️ <i>Общий режим опасности атаки БПЛА в регионе сохраняется.</i>")
 
+    excerpt_idx: int | None = None
     if alert.excerpt:
+        excerpt_idx = len(parts)
         parts.append(html.escape(alert.excerpt, quote=False))
 
     if include_safety_memo and not alert.kind.is_clear:
@@ -95,33 +98,43 @@ def format_alert_post(
                 "властей и МЧС, при сирене укройтесь вдали от окон.</i>"
             )
 
-    time_label = ""
+    time_only = ""
     if msg.published_at is not None:
         try:
             dt_local = msg.published_at.astimezone(ZoneInfo(tz_name))
-            time_label = f" • {dt_local.strftime('%d.%m.%Y %H:%M')}"
+            time_only = dt_local.strftime("%d.%m.%Y %H:%M")
         except Exception:
-            time_label = ""
-
-    source_escaped = html.escape(msg.source_name, quote=False)
-    if msg.url:
-        url_escaped = html.escape(msg.url, quote=True)
-        source_line = f'🔗 <a href="{url_escaped}">{source_escaped}</a>{html.escape(time_label, quote=False)}'
-    else:
-        source_line = f"🔗 {source_escaped}{html.escape(time_label, quote=False)}"
+            time_only = ""
 
     tags_line = " ".join(tags)
-    parts.append(f"{tags_line}\n{source_line}")
+    if include_source:
+        source_escaped = html.escape(msg.source_name, quote=False)
+        time_suffix = f" • {time_only}" if time_only else ""
+        if msg.url:
+            url_escaped = html.escape(msg.url, quote=True)
+            source_line = (
+                f'🔗 <a href="{url_escaped}">{source_escaped}</a>'
+                f"{html.escape(time_suffix, quote=False)}"
+            )
+        else:
+            source_line = f"🔗 {source_escaped}{html.escape(time_suffix, quote=False)}"
+        parts.append(f"{tags_line}\n{source_line}")
+    else:
+        if time_only:
+            parts.append(f"{tags_line} • {html.escape(time_only, quote=False)}")
+        else:
+            parts.append(tags_line)
 
     rendered = "\n\n".join(parts)
     if len(rendered) <= max_length:
         return rendered
 
     # При редком превышении лимита укорачиваем только цитату (excerpt)
-    overhead = len(rendered) - len(html.escape(alert.excerpt, quote=False))
-    budget = max(80, max_length - overhead - 8)
-    short_excerpt = alert.excerpt[:budget].rstrip() + "…"
-    parts[2 if len(parts) > 3 else 1] = html.escape(short_excerpt, quote=False)
+    if excerpt_idx is not None:
+        overhead = len(rendered) - len(parts[excerpt_idx])
+        budget = max(80, max_length - overhead - 8)
+        short_excerpt = alert.excerpt[:budget].rstrip() + "…"
+        parts[excerpt_idx] = html.escape(short_excerpt, quote=False)
     return "\n\n".join(parts)[:max_length]
 
 
@@ -255,12 +268,14 @@ class TelegramAlertClient:
         *,
         tz_name: str = "Europe/Moscow",
         include_safety_memo: bool = True,
+        include_source: bool = False,
         disable_notification: bool = False,
     ) -> int:
         text = format_alert_post(
             candidate,
             tz_name=tz_name,
             include_safety_memo=include_safety_memo,
+            include_source=include_source,
         )
         return self.send_message(
             channel_id,

@@ -186,8 +186,15 @@ class AlertStorage:
                 )
             self._conn.commit()
 
-    def is_family_active(self, family: str, *, state_ttl_hours: int = 12) -> bool:
+    def is_family_active(
+        self,
+        family: str,
+        *,
+        state_ttl_hours: int = 12,
+        now: datetime | None = None,
+    ) -> bool:
         """Возвращает True, если угроза данного семейства сейчас активна и не устарела по TTL."""
+        ref_now = now or datetime.now(timezone.utc)
         with self._lock:
             row = self._conn.execute(
                 "SELECT active, updated_at FROM threat_state WHERE family = ?",
@@ -199,7 +206,7 @@ class AlertStorage:
                 updated_at = datetime.fromisoformat(str(row["updated_at"]))
                 if updated_at.tzinfo is None:
                     updated_at = updated_at.replace(tzinfo=timezone.utc)
-                return (datetime.now(timezone.utc) - updated_at) <= timedelta(hours=state_ttl_hours)
+                return (ref_now - updated_at) <= timedelta(hours=state_ttl_hours)
             except ValueError:
                 return True
 
@@ -271,7 +278,7 @@ class AlertStorage:
         # 3. Для общеобластных/городских тревог (UAV/Missile/Aviation):
         #    повторное введение того же режима, пока он уже активен, подавляется.
         if kind in {AlertKind.UAV_ALERT, AlertKind.MISSILE_ALERT, AlertKind.AVIATION_ALERT}:
-            if self.is_family_active(family, state_ttl_hours=state_ttl_hours):
+            if self.is_family_active(family, state_ttl_hours=state_ttl_hours, now=ref_now):
                 return True
 
         # 4. Для отбоя общеобластных режимов подавляем повтор в окне охлаждения вне зависимости от location_key

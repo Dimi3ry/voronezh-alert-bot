@@ -34,11 +34,12 @@
    - `ALERT_MAX_ITEM_AGE_MINUTES`: `120` (не отправлять сообщения старше N минут).
    - `ALERT_INITIAL_POST_LIMIT`: `1` (сколько свежих событий максимум отправить при первом запуске).
    - `ALERT_INCLUDE_SAFETY_MEMO`: `true` (добавлять короткую памятку по безопасности).
+   - `ALERT_INCLUDE_SOURCE`: `false` (по умолчанию источник и ссылка в подписи скрыты; поставьте `true`, чтобы показывать).
 4. Проверьте, что в **Settings → Actions → General → Workflow permissions** включено **Read and write permissions** (для сохранения базы `alert_bot.db` в отдельную служебную ветку `alert-bot-state`, независимую от `bot-state`).
 5. Откройте **Actions → Run Voronezh Alert Bot → Run workflow**:
    - сначала можно запустить `dry-run` (проверка без отправки в Telegram);
    - затем `seed` (отметить старые посты без публикации) или сразу `once`.
-   - Далее workflow будет запускаться автоматически каждые 5 минут (`*/5 * * * *`).
+   - Для регулярного запуска по расписанию используйте внешний cron-сервис (например, `cron-job.org`), вызывающий `workflow_dispatch` через GitHub REST API (`POST .../actions/workflows/run-alert-bot.yml/dispatches`).
 
 > [!NOTE]
 > У GitHub Actions минимальный шаг `cron` — 5 минут, при этом платформа иногда запускает расписание с задержкой в несколько минут. Для мгновенной реакции (раз в 30–60 секунд) в будущем бота можно запускать тем же модулем `python -m voronezh_alert_bot --once` по таймеру на сервере.
